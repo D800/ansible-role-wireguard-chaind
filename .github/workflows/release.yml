@@ -16,7 +16,7 @@ on:
 
 defaults:
   run:
-    working-directory: 'githubixx.ansible_role_wireguard'
+    working-directory: 'D800.ansible_role_wireguard_chaind'
 
 jobs:
   release:
@@ -26,7 +26,7 @@ jobs:
       - name: Check out the codebase.
         uses: actions/checkout@v2
         with:
-          path: 'githubixx.ansible_role_wireguard'
+          path: 'D800.ansible_role_wireguard_chaind'
 
       - name: Set up Python 3.
         uses: actions/setup-python@v2

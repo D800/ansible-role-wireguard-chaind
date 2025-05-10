@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 galaxy_info:
-  author: Robert Wimmer
+  author: D800
   description: Installs Wireguard incl. systemd integration
   license: GPL-3.0-or-later
   min_ansible_version: "2.11"
-  namespace: githubixx
-  role_name: ansible_role_wireguard
+  namespace: d800
+  role_name: ansible_role_wireguard_chaind
   platforms:
     - name: ArchLinux
     - name: Ubuntu
@@ -32,7 +32,6 @@ galaxy_info:
     - name: opensuse
       versions:
         - "15.5"
-        - "15.6"
   galaxy_tags:
     - networking
     - security

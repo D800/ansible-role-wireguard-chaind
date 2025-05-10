@@ -10,4 +10,4 @@
   tasks:
     - name: Include WireGuard role
       ansible.builtin.include_role:
-        name: githubixx.ansible_role_wireguard
+        name: D800.ansible_role_wireguard_chaind

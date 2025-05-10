@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: ansible-role-wireguard
+Upstream-Name: ansible-role-wireguard-chaind
 Upstream-Contact: Robert Wimmer <>
-Source: https://github.com/githubixx/ansible-role-wireguard
+Source: https://github.com/D800/ansible-role-wireguard-chaind
 
 # Sample paragraph, commented out:
 #
