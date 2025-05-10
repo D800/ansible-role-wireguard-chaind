@@ -4,3 +4,4 @@
 molecule/kvm/.vagrant
 .vscode
 запрос_*.md
+test/inventory.yml
