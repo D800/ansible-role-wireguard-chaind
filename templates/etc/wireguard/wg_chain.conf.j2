@@ -5,7 +5,7 @@
 # {{ ansible_managed }}
 
 [Interface]
-# {{ inventory_hostname }} - {{ wireguard_interface | default('wg0') }}
+# {{ inventory_hostname }}
 {% if wireguard_address is defined %}
 Address = {{ wireguard_address }}
 {% endif %}
@@ -16,7 +16,7 @@ Address = {{ wg_addr }}
 {% endif %}
 PrivateKey = {{ wireguard_private_key }}
 {% if wireguard_endpoint is defined and wireguard_endpoint != "" %}
-ListenPort = {{ wireguard_port | default(51820) }}
+ListenPort = {{ wireguard_port }}
 {% endif %}
 {% if wireguard_dns is defined %}
 DNS = {{ wireguard_dns }}
@@ -54,50 +54,135 @@ PostDown = {{ wg_postdown }}
 SaveConfig = {{ wireguard_save_config }}
 {% endif %}
 
-{% macro get_allowed_ips_for_higher_indexes(peer_index) %}
-{%   set higher_hosts = ansible_play_hosts | selectattr('wireguard_chain_index', 'defined') | selectattr('wireguard_chain_index', 'gt', peer_index) | list %}
-{%   for h in higher_hosts %}{{ hostvars[h].wireguard_allowed_ips }},{% endfor %}
-{% endmacro %}
-
-{% macro get_allowed_ips_for_lower_indexes(peer_index) %}
-{%   set lower_hosts = ansible_play_hosts | selectattr('wireguard_chain_index', 'defined') | selectattr('wireguard_chain_index', 'lt', peer_index) | list %}
-{%   for h in lower_hosts %}{{ hostvars[h].wireguard_allowed_ips }},{% endfor %}
-{% endmacro %}
-
 {% for host in ansible_play_hosts %}
-{%   if host != inventory_hostname and hostvars[host].wireguard_chain_index is defined and wireguard_chain_index is defined %}
-{%     set current_index = wireguard_chain_index | int %}
-{%     set peer_index = hostvars[host].wireguard_chain_index | int %}
-{%     if peer_index == current_index + 1 or peer_index == current_index - 1 %}
+{%   if host != inventory_hostname and hostvars[host].wireguard_chain_index is defined and ((hostvars[host].wireguard_chain_index | int - wireguard_chain_index | int ) | abs == 1  ) %}
+
 [Peer]
 # Name = {{ host }}
-PublicKey = {{ hostvars[host].wireguard__fact_public_key }}
-{%       if peer_index == current_index + 1 %}
-AllowedIPs = {{ hostvars[host].wireguard_allowed_ips }}, {{ get_allowed_ips_for_higher_indexes(peer_index) }}
-{%       elif peer_index == current_index - 1 %}
-AllowedIPs = {{ hostvars[host].wireguard_allowed_ips }}, {{ get_allowed_ips_for_lower_indexes(peer_index) }}
-{%       endif %}
-{%       if hostvars[host].wireguard_endpoint is defined and hostvars[host].wireguard_endpoint != "" %}
-Endpoint = {{ hostvars[host].wireguard_endpoint }}:{{ hostvars[host].wireguard_port | default(wireguard_port | default(51820)) }}
-{%       endif %}
-{%       if hostvars[host].wireguard_persistent_keepalive is defined %}
-PersistentKeepalive = {{ hostvars[host].wireguard_persistent_keepalive }}
-{%       endif %}
+PublicKey = {{hostvars[host].wireguard__fact_public_key}}
+{#     решаем ниже или выше #}
+{%     if ((hostvars[host].wireguard_chain_index | int - wireguard_chain_index | int ) >= 1  ) %}
+{%       set all_chain_cidrs = [] %}
+{%       for chain_host in ansible_play_hosts %}
+{%         if ((hostvars[chain_host].wireguard_chain_index | int - wireguard_chain_index | int ) >= 1  ) %}
+{%           if hostvars[chain_host].wireguard_allowed_ips is defined %}
+{%             set ips = hostvars[chain_host].wireguard_allowed_ips
+                 .split(',')
+                 | map('trim')
+                 | list %}
+{%             set all_chain_cidrs = all_chain_cidrs + ips %}
+{%           endif %}
+
+{%           if hostvars[chain_host].wireguard_addresses is defined %}
+{%             for wg_addr_g in hostvars[chain_host].wireguard_addresses %}
+{%               if (wg_addr_g | ansible.utils.ipv4) %}
+{%                 set all_chain_cidrs = all_chain_cidrs + [ wg_addr_g.split('/')[0] ~ '/32' ] %}
+{%               elif (wg_addr_g | ansible.utils.ipv6) %}
+{%                 set all_chain_cidrs = all_chain_cidrs + [ wg_addr_g.split('/')[0] ~ '/128' ] %}
+{%               endif %}
+{%             endfor %}
+{%           endif %}
+
+{%           if hostvars[chain_host].wireguard_address is defined %}
+{%             if (hostvars[chain_host].wireguard_address | ansible.utils.ipv4) %}
+{%               set all_chain_cidrs = all_chain_cidrs + [ hostvars[chain_host].wireguard_address.split('/')[0] ~ '/32' ] %}
+{%             elif (hostvars[chain_host].wireguard_address | ansible.utils.ipv6) %}
+{%               set all_chain_cidrs = all_chain_cidrs + [ hostvars[chain_host].wireguard_address.split('/')[0] ~ '/128' ] %}
+{%             endif %}
+{%           endif %}
+
+{%         endif %}
+{%       endfor %}
+{%       set unique_cidrs = all_chain_cidrs | unique %}
+AllowedIPs = {{ unique_cidrs | join(', ') }} 
+{#     случай когда ниже по цепочке end #}
+{%     elif ((hostvars[host].wireguard_chain_index | int - wireguard_chain_index | int ) <= -1  )%}
+{#     случай когда выше по цепочке #}
+{%       set all_chain_cidrs = [] %}
+{%       for chain_host in ansible_play_hosts %}
+{%         if ((hostvars[chain_host].wireguard_chain_index | int - wireguard_chain_index | int ) <= -1  ) %}
+{%           if hostvars[chain_host].wireguard_allowed_ips is defined %}
+{%             set ips = hostvars[chain_host].wireguard_allowed_ips
+                 .split(',')
+                 | map('trim')
+                 | list %}
+{%             set all_chain_cidrs = all_chain_cidrs + ips %}
+{%           endif %}
+
+{%           if hostvars[chain_host].wireguard_addresses is defined %}
+{%             for wg_addr_g in hostvars[chain_host].wireguard_addresses %}
+{%               if (wg_addr_g | ansible.utils.ipv4) %}
+{%                 set all_chain_cidrs = all_chain_cidrs + [ wg_addr_g.split('/')[0] ~ '/32' ] %}
+{%               elif (wg_addr_g | ansible.utils.ipv6) %}
+{%                 set all_chain_cidrs = all_chain_cidrs + [ wg_addr_g.split('/')[0] ~ '/128' ] %}
+{%               endif %}
+{%             endfor %}
+{%           endif %}
+
+{%           if hostvars[chain_host].wireguard_address is defined %}
+{%             if (hostvars[chain_host].wireguard_address | ansible.utils.ipv4) %}
+{%               set all_chain_cidrs = all_chain_cidrs + [ hostvars[chain_host].wireguard_address.split('/')[0] ~ '/32' ] %}
+{%             elif (hostvars[chain_host].wireguard_address | ansible.utils.ipv6) %}
+{%               set all_chain_cidrs = all_chain_cidrs + [ hostvars[chain_host].wireguard_address.split('/')[0] ~ '/128' ] %}
+{%             endif %}
+{%           endif %}
+
+{%         endif %}
+{%       endfor %}
+{%       set unique_cidrs = all_chain_cidrs | unique %}
+AllowedIPs = {{ unique_cidrs | join(', ') }}
+{#     случай когда выше по цепочке end #}
 {%     endif %}
+{#     решаем ниже или выше end #}
+{%     if hostvars[host].wireguard_persistent_keepalive is defined and hostvars[host].wireguard_endpoint is defined and hostvars[host].wireguard_endpoint != "" %}
+PersistentKeepalive = {{hostvars[host].wireguard_persistent_keepalive}}
+{%     endif %}
+{%     if (
+         hostvars[host].wireguard_dc is defined and
+         wireguard_dc is defined and
+         wireguard_dc['name'] != hostvars[host].wireguard_dc['name']
+       )
+%}
+Endpoint = {{hostvars[host].wireguard_dc['endpoint']}}:{{hostvars[host].wireguard_dc['port']}}
+{%     elif hostvars[host].wireguard_port is defined %}
+{%       if hostvars[host].wireguard_endpoint is defined and hostvars[host].wireguard_endpoint != "" %}
+Endpoint = {{hostvars[host].wireguard_endpoint}}:{{hostvars[host].wireguard_port}}
+{%       else %}
+Endpoint = {{host}}:{{hostvars[host].wireguard_port}}
+{%       endif %}
+{%     elif hostvars[host].wireguard_endpoint is defined %}
+{%       if hostvars[host].wireguard_endpoint != "" %}
+Endpoint = {{hostvars[host].wireguard_endpoint}}:{{wireguard_port}}
+{%       else %}
+# No endpoint defined for this peer
+{%       endif %}
+{%     else %}
+Endpoint = {{host}}:{{wireguard_port}}
+{%     endif %}
+
+
 {%   endif %}
 {% endfor %}
 
+
+
 {% if wireguard_unmanaged_peers is defined %}
-{%   for peer in wireguard_unmanaged_peers %}
+# Peers not managed by Ansible from "wireguard_unmanaged_peers" variable
+{% for peer in wireguard_unmanaged_peers.keys() %}
 [Peer]
-# Name = {{ peer.name | default('unmanaged_peer') }}
-PublicKey = {{ peer.public_key }}
-AllowedIPs = {{ peer.allowed_ips }}
-{%     if peer.endpoint is defined %}
-Endpoint = {{ peer.endpoint }}
+# Name = {{ peer }}
+PublicKey = {{ wireguard_unmanaged_peers[peer].public_key }}
+{%     if wireguard_unmanaged_peers[peer].preshared_key is defined %}
+PresharedKey = {{ wireguard_unmanaged_peers[peer].preshared_key }}
 {%     endif %}
-{%     if peer.persistent_keepalive is defined %}
-PersistentKeepalive = {{ peer.persistent_keepalive }}
+{%     if wireguard_unmanaged_peers[peer].allowed_ips is defined %}
+AllowedIPs = {{ wireguard_unmanaged_peers[peer].allowed_ips }}
+{%     endif %}
+{%     if wireguard_unmanaged_peers[peer].endpoint is defined %}
+Endpoint = {{ wireguard_unmanaged_peers[peer].endpoint }}
+{%     endif %}
+{%     if wireguard_unmanaged_peers[peer].persistent_keepalive is defined %}
+PersistentKeepalive = {{ wireguard_unmanaged_peers[peer].persistent_keepalive }}
 {%     endif %}
 {%   endfor %}
 {% endif %}
