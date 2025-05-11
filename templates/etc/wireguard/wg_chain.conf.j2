@@ -59,12 +59,13 @@ SaveConfig = {{ wireguard_save_config }}
 [Peer]
 # Name = {{ host }} chain_index {{ hostvars[host].wireguard_chain_index }}
 PublicKey = {{hostvars[host].wireguard__fact_public_key}}
+{% set ns = namespace(all_chain_cidrs=[]) %}
 {#     решаем ниже или выше #}
 {%     if ((hostvars[host].wireguard_chain_index | int - wireguard_chain_index | int ) >= 1  ) %}
-{%       set all_chain_cidrs = [] %}
+{%       set ns.all_chain_cidrs = [] %}
 {%       for chain_host in ansible_play_hosts %}
 # {{ chain_host }} index {{ hostvars[chain_host].wireguard_chain_index }} ниже
-# all_chain_cidrs at the begining {{ all_chain_cidrs }}
+# ns.all_chain_cidrs at the begining {{ ns.all_chain_cidrs }}
 # allowed_ips {{ hostvars[chain_host].wireguard_allowed_ips | default('not defined') }} addresses {{ hostvars[chain_host].wireguard_addresses | default('not defined') }} address {{ hostvars[chain_host].wireguard_address | default('not defined') }}
 {%         if ((hostvars[chain_host].wireguard_chain_index | int - wireguard_chain_index | int ) >= 1  ) %}
 {%           if hostvars[chain_host].wireguard_allowed_ips is defined %}
@@ -73,38 +74,38 @@ PublicKey = {{hostvars[host].wireguard__fact_public_key}}
                  .split(',')
                  | map('trim')
                  | list %}
-# >= 1 ips: {{ ips | default('some erorr') }}  all_chain_cidrs {{ all_chain_cidrs | default('some erorr') }}  
-{%             set all_chain_cidrs = all_chain_cidrs + ips %}
-# >= 1 ips: {{ ips | default('some erorr') }}  all_chain_cidrs + ips {{ all_chain_cidrs | default('some erorr') }} 
+# >= 1 ips: {{ ips | default('some erorr') }}  ns.all_chain_cidrs {{ ns.all_chain_cidrs | default('some erorr') }}  
+{%             set ns.all_chain_cidrs = ns.all_chain_cidrs + ips %}
+# >= 1 ips: {{ ips | default('some erorr') }}  ns.all_chain_cidrs + ips {{ ns.all_chain_cidrs | default('some erorr') }} 
 {%           endif %}
 {%           if hostvars[chain_host].wireguard_addresses is defined %}
 {%             for wg_addr_g in hostvars[chain_host].wireguard_addresses %}
 {%               if (wg_addr_g | ansible.utils.ipv4) %}
-{%                 set all_chain_cidrs = all_chain_cidrs + [ wg_addr_g.split('/')[0] ~ '/32' ] %}
+{%                 set ns.all_chain_cidrs = ns.all_chain_cidrs + [ wg_addr_g.split('/')[0] ~ '/32' ] %}
 {%               elif (wg_addr_g | ansible.utils.ipv6) %}
-{%                 set all_chain_cidrs = all_chain_cidrs + [ wg_addr_g.split('/')[0] ~ '/128' ] %}
+{%                 set ns.all_chain_cidrs = ns.all_chain_cidrs + [ wg_addr_g.split('/')[0] ~ '/128' ] %}
 {%               endif %}
 {%             endfor %}
 {%           endif %}
 {%           if hostvars[chain_host].wireguard_address is defined %}
 {%             if (hostvars[chain_host].wireguard_address | ansible.utils.ipv4) %}
-{%               set all_chain_cidrs = all_chain_cidrs + [ hostvars[chain_host].wireguard_address.split('/')[0] ~ '/32' ] %}
+{%               set ns.all_chain_cidrs = ns.all_chain_cidrs + [ hostvars[chain_host].wireguard_address.split('/')[0] ~ '/32' ] %}
 {%             elif (hostvars[chain_host].wireguard_address | ansible.utils.ipv6) %}
-{%               set all_chain_cidrs = all_chain_cidrs + [ hostvars[chain_host].wireguard_address.split('/')[0] ~ '/128' ] %}
+{%               set ns.all_chain_cidrs = ns.all_chain_cidrs + [ hostvars[chain_host].wireguard_address.split('/')[0] ~ '/128' ] %}
 {%             endif %}
 {%           endif %}
 {%         endif %}
 {%       endfor %}
-# all_chain_cidrs after all ifs {{ all_chain_cidrs }}
-{%       set unique_cidrs = all_chain_cidrs | unique %}
+# ns.all_chain_cidrs after all ifs {{ ns.all_chain_cidrs }}
+{%       set unique_cidrs = ns.all_chain_cidrs | unique %}
 AllowedIPs = {{ unique_cidrs | join(', ') }} 
 {#     случай когда ниже по цепочке end #}
 {%     elif ((hostvars[host].wireguard_chain_index | int - wireguard_chain_index | int ) <= -1  )%}
 {#     случай когда выше по цепочке #}
-{%       set all_chain_cidrs = [] %}
+{%       set ns.all_chain_cidrs = [] %}
 {%       for chain_host in ansible_play_hosts %}
 # {{ chain_host }} index {{ hostvars[chain_host].wireguard_chain_index }} выше
-# all_chain_cidrs at the begining {{ all_chain_cidrs }}
+# ns.all_chain_cidrs at the begining {{ ns.all_chain_cidrs }}
 # allowed_ips {{ hostvars[chain_host].wireguard_allowed_ips | default('not defined') }} addresses {{ hostvars[chain_host].wireguard_addresses | default('not defined') }} address {{ hostvars[chain_host].wireguard_address | default('not defined') }}
 {%         if ((hostvars[chain_host].wireguard_chain_index | int - wireguard_chain_index | int ) <= -1  ) %}
 # <= -1 allowed_ips {{ hostvars[chain_host].wireguard_allowed_ips }}
@@ -113,30 +114,30 @@ AllowedIPs = {{ unique_cidrs | join(', ') }}
                  .split(',')
                  | map('trim')
                  | list %}
-# <= -1 ips: {{ ips | default('some erorr') }} all_chain_cidrs {{ all_chain_cidrs | default('some erorr') }}   
-{%             set all_chain_cidrs = all_chain_cidrs + ips %}
-# <= -1 ips: {{ ips | default('some erorr') }}  all_chain_cidrs + ips {{ all_chain_cidrs | default('some erorr') }}
+# <= -1 ips: {{ ips | default('some erorr') }} ns.all_chain_cidrs {{ ns.all_chain_cidrs | default('some erorr') }}   
+{%             set ns.all_chain_cidrs = ns.all_chain_cidrs + ips %}
+# <= -1 ips: {{ ips | default('some erorr') }}  ns.all_chain_cidrs + ips {{ ns.all_chain_cidrs | default('some erorr') }}
 {%           endif %}
 {%           if hostvars[chain_host].wireguard_addresses is defined %}
 {%             for wg_addr_g in hostvars[chain_host].wireguard_addresses %}
 {%               if (wg_addr_g | ansible.utils.ipv4) %}
-{%                 set all_chain_cidrs = all_chain_cidrs + [ wg_addr_g.split('/')[0] ~ '/32' ] %}
+{%                 set ns.all_chain_cidrs = ns.all_chain_cidrs + [ wg_addr_g.split('/')[0] ~ '/32' ] %}
 {%               elif (wg_addr_g | ansible.utils.ipv6) %}
-{%                 set all_chain_cidrs = all_chain_cidrs + [ wg_addr_g.split('/')[0] ~ '/128' ] %}
+{%                 set ns.all_chain_cidrs = ns.all_chain_cidrs + [ wg_addr_g.split('/')[0] ~ '/128' ] %}
 {%               endif %}
 {%             endfor %}
 {%           endif %}
 {%           if hostvars[chain_host].wireguard_address is defined %}
 {%             if (hostvars[chain_host].wireguard_address | ansible.utils.ipv4) %}
-{%               set all_chain_cidrs = all_chain_cidrs + [ hostvars[chain_host].wireguard_address.split('/')[0] ~ '/32' ] %}
+{%               set ns.all_chain_cidrs = ns.all_chain_cidrs + [ hostvars[chain_host].wireguard_address.split('/')[0] ~ '/32' ] %}
 {%             elif (hostvars[chain_host].wireguard_address | ansible.utils.ipv6) %}
-{%               set all_chain_cidrs = all_chain_cidrs + [ hostvars[chain_host].wireguard_address.split('/')[0] ~ '/128' ] %}
+{%               set ns.all_chain_cidrs = ns.all_chain_cidrs + [ hostvars[chain_host].wireguard_address.split('/')[0] ~ '/128' ] %}
 {%             endif %}
 {%           endif %}
 {%         endif %}
 {%       endfor %}
-# all_chain_cidrs after all ifs {{ all_chain_cidrs }}
-{%       set unique_cidrs = all_chain_cidrs | unique %}
+# ns.all_chain_cidrs after all ifs {{ ns.all_chain_cidrs }}
+{%       set unique_cidrs = ns.all_chain_cidrs | unique %}
 AllowedIPs = {{ unique_cidrs | join(', ') }}
 {#     случай когда выше по цепочке end #}
 {%     endif %}
